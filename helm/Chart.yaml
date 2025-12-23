@@ -1,0 +1,25 @@
+apiVersion: v2
+name: ai-assessment
+description: AI-Assisted Assessment Evaluation System with Human-in-the-Loop
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - ai
+  - assessment
+  - education
+  - streamlit
+  - langchain
+  - openai
+
+home: https://github.com/Bhardwaj-Saurabh/workflow-automation-aiops
+
+sources:
+  - https://github.com/Bhardwaj-Saurabh/workflow-automation-aiops
+
+maintainers:
+  - name: Saurabh Bhardwaj
+    email: saurabh@example.com
+
+icon: https://streamlit.io/images/brand/streamlit-mark-color.png
