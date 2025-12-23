@@ -4,6 +4,9 @@ langchain==0.3.7
 langchain-openai==0.2.8
 langgraph==0.2.45
 
+# HTTP client (pinned for OpenAI compatibility)
+httpx<0.28.0
+
 # Web UI
 streamlit==1.39.0
 
