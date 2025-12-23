@@ -88,19 +88,78 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
 ```
 
-### Run the Application
+---
+
+## 🚀 Deployment
+
+### Microservices Architecture
+
+The application uses a microservices architecture with separate frontend and backend services:
+
+```
+Frontend (Streamlit) → Backend API (FastAPI) → OpenAI
+```
+
+### Docker Compose (Recommended for Local)
+
+Run both services with one command:
 
 ```bash
-streamlit run ui/streamlit_app.py
+# Set environment variables
+cp .env.example .env
+# Edit .env and add your OPENAI_API_KEY
+
+# Start both services
+docker-compose up -d
+
+# Frontend: http://localhost:8501
+# Backend API: http://localhost:8000/docs
 ```
 
-Open your browser to `http://localhost:8501`
+See [Docker Deployment Guide](docs/deployment/docker.md) for details.
+
+### Kubernetes with Helm
+
+Deploy to Kubernetes cluster with separate frontend and backend deployments:
+
+```bash
+# Build and push images
+docker build -f Dockerfile.backend -t ghcr.io/yourusername/ai-assessment-backend:1.0.0 .
+docker build -f Dockerfile.frontend -t ghcr.io/yourusername/ai-assessment-frontend:1.0.0 .
+docker push ghcr.io/yourusername/ai-assessment-backend:1.0.0
+docker push ghcr.io/yourusername/ai-assessment-frontend:1.0.0
+
+# Deploy with Helm
+helm install ai-assessment ./helm \
+  --namespace ai-assessment \
+  --create-namespace \
+  --set backend.image.repository=ghcr.io/yourusername/ai-assessment-backend \
+  --set frontend.image.repository=ghcr.io/yourusername/ai-assessment-frontend \
+  --set secrets.openaiApiKey=$OPENAI_API_KEY
+
+# Access application
+kubectl port-forward svc/ai-assessment-frontend 8501:80 -n ai-assessment
+```
+
+See [Kubernetes Deployment Guide](docs/deployment/kubernetes.md) for details.
+
+### Automated Deployment
+
+Use the deployment script:
+
+```bash
+./scripts/deploy.sh prod 1.0.0
+```
+
+### Service Endpoints
+
+- **Frontend UI**: Port 8501 (public)
+- **Backend API**: Port 8000 (internal)
+  - Swagger UI: `/docs`
+  - Health check: `/health`
+  - API endpoints: `/api/v1/*`
 
 ---
 

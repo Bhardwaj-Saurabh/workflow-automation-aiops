@@ -1,6 +1,34 @@
 # Docker Deployment Guide
 
-This guide covers deploying the AI Assessment System using Docker and Docker Compose.
+This guide covers deploying the AI Assessment System using Docker and Docker Compose with **microservices architecture**.
+
+---
+
+## Architecture Overview
+
+The application is split into two services:
+
+1. **Backend API** (FastAPI) - Port 8000
+   - Business logic and AI evaluation
+   - REST API endpoints
+   - OpenAI integration
+
+2. **Frontend UI** (Streamlit) - Port 8501
+   - User interface
+   - Communicates with backend via HTTP
+
+```
+┌─────────────┐      HTTP      ┌─────────────┐
+│  Frontend   │ ─────────────→ │   Backend   │
+│ (Streamlit) │                │  (FastAPI)  │
+│  Port 8501  │                │  Port 8000  │
+└─────────────┘                └──────┬──────┘
+                                      │
+                                      ▼
+                               ┌─────────────┐
+                               │  OpenAI API │
+                               └─────────────┘
+```
 
 ---
 
@@ -36,60 +64,77 @@ CONFIDENCE_THRESHOLD=0.7
 docker-compose up -d
 ```
 
+This starts both services:
+- Backend API: http://localhost:8000
+- Frontend UI: http://localhost:8501
+
 ### 3. Access the Application
 
-Open your browser to: `http://localhost:8501`
+**Frontend UI**: Open http://localhost:8501 in your browser
+
+**Backend API Docs**: http://localhost:8000/docs (Swagger UI)
 
 ---
 
-## Building the Docker Image
+## Building Individual Images
 
-### Build Locally
+### Build Backend
 
 ```bash
-docker build -t ai-assessment:1.0.0 .
+docker build -f Dockerfile.backend -t ai-assessment-backend:1.0.0 .
 ```
 
-### Build with Specific Target
+### Build Frontend
 
 ```bash
-# Production image
-docker build --target production -t ai-assessment:prod .
+docker build -f Dockerfile.frontend -t ai-assessment-frontend:1.0.0 .
 ```
 
 ---
 
-## Running the Container
+## Running Individual Containers
 
-### Basic Run
+### Run Backend Only
 
 ```bash
 docker run -d \
-  -p 8501:8501 \
+  -p 8000:8000 \
   -e OPENAI_API_KEY=sk-your-key \
-  --name ai-assessment \
-  ai-assessment:1.0.0
+  --name ai-assessment-backend \
+  ai-assessment-backend:1.0.0
 ```
 
-### With Environment File
+### Run Frontend Only
 
 ```bash
 docker run -d \
   -p 8501:8501 \
-  --env-file .env \
-  --name ai-assessment \
-  ai-assessment:1.0.0
+  -e BACKEND_API_URL=http://backend:8000 \
+  --name ai-assessment-frontend \
+  ai-assessment-frontend:1.0.0
 ```
 
-### With Volume Mounts
+### Run Both with Docker Network
 
 ```bash
+# Create network
+docker network create ai-assessment-network
+
+# Run backend
+docker run -d \
+  -p 8000:8000 \
+  -e OPENAI_API_KEY=sk-your-key \
+  --network ai-assessment-network \
+  --name backend \
+  ai-assessment-backend:1.0.0
+
+# Run frontend
 docker run -d \
   -p 8501:8501 \
-  -e OPENAI_API_KEY=sk-your-key \
-  -v $(pwd)/tests/sample_documents:/app/tests/sample_documents:ro \
-  --name ai-assessment \
-  ai-assessment:1.0.0
+  -e BACKEND_API_URL=http://backend:8000 \
+  --network ai-assessment-network \
+  --name frontend \
+  ai-assessment-frontend:1.0.0
 ```
 
 ---
@@ -105,7 +150,14 @@ docker-compose up -d
 ### View Logs
 
 ```bash
+# All services
 docker-compose logs -f
+
+# Backend only
+docker-compose logs -f backend
+
+# Frontend only
+docker-compose logs -f frontend
 ```
 
 ### Stop Services
@@ -122,26 +174,40 @@ docker-compose up -d --build
 
 ---
 
+## Service Communication
+
+The frontend communicates with the backend via the `BACKEND_API_URL` environment variable:
+
+- **In Docker Compose**: `http://backend:8000` (service name)
+- **In Kubernetes**: `http://ai-assessment-backend:8000` (service name)
+- **Local development**: `http://localhost:8000`
+
+---
+
 ## Image Optimization
 
-### Check Image Size
+### Check Image Sizes
 
 ```bash
-docker images ai-assessment
+docker images | grep ai-assessment
 ```
+
+Expected sizes:
+- Backend: ~500-700 MB
+- Frontend: ~400-600 MB
 
 ### Multi-Stage Build Benefits
 
-Our Dockerfile uses multi-stage builds to:
+Both Dockerfiles use multi-stage builds to:
 - Reduce final image size
 - Separate build dependencies from runtime
 - Improve security by minimizing attack surface
 
 ### Best Practices Applied
 
-1. **Minimal Base Image**: Using `python:3.11-slim`
+1. **Minimal Base Images**: Using `python:3.11-slim`
 2. **Layer Caching**: Dependencies installed before code copy
-3. **Non-Root User**: Runs as user `appuser` (UID 1000)
+3. **Non-Root User**: Both run as user `appuser` (UID 1000)
 4. **Health Checks**: Built-in health monitoring
 5. **.dockerignore**: Excludes unnecessary files
 
@@ -152,14 +218,13 @@ Our Dockerfile uses multi-stage builds to:
 ### Docker Hub
 
 ```bash
-# Login
-docker login
-
-# Tag
-docker tag ai-assessment:1.0.0 yourusername/ai-assessment:1.0.0
+# Tag images
+docker tag ai-assessment-backend:1.0.0 yourusername/ai-assessment-backend:1.0.0
+docker tag ai-assessment-frontend:1.0.0 yourusername/ai-assessment-frontend:1.0.0
 
 # Push
-docker push yourusername/ai-assessment:1.0.0
+docker push yourusername/ai-assessment-backend:1.0.0
+docker push yourusername/ai-assessment-frontend:1.0.0
 ```
 
 ### GitHub Container Registry
@@ -169,28 +234,81 @@ docker push yourusername/ai-assessment:1.0.0
 echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 
 # Tag
-docker tag ai-assessment:1.0.0 ghcr.io/bhardwaj-saurabh/ai-assessment:1.0.0
+docker tag ai-assessment-backend:1.0.0 ghcr.io/bhardwaj-saurabh/ai-assessment-backend:1.0.0
+docker tag ai-assessment-frontend:1.0.0 ghcr.io/bhardwaj-saurabh/ai-assessment-frontend:1.0.0
 
 # Push
-docker push ghcr.io/bhardwaj-saurabh/ai-assessment:1.0.0
+docker push ghcr.io/bhardwaj-saurabh/ai-assessment-backend:1.0.0
+docker push ghcr.io/bhardwaj-saurabh/ai-assessment-frontend:1.0.0
 ```
+
+---
+
+## API Endpoints
+
+The backend exposes the following REST API endpoints:
+
+### Document Processing
+- `POST /api/v1/upload` - Upload document file
+- `POST /api/v1/submit-text` - Submit text directly
+
+### Evaluation
+- `POST /api/v1/evaluate` - Start AI evaluation (async)
+- `GET /api/v1/workflow/{id}` - Get workflow status
+
+### Human Review
+- `POST /api/v1/feedback` - Submit human feedback
+
+### Reports
+- `POST /api/v1/generate-report/{id}` - Generate report
+- `GET /api/v1/report/{id}/markdown` - Get report as markdown
+
+### System
+- `GET /health` - Health check
+- `GET /api/v1/workflows` - List all workflows
+
+**API Documentation**: http://localhost:8000/docs (Swagger UI)
 
 ---
 
 ## Troubleshooting
 
-### Container Won't Start
+### Backend Won't Start
 
 Check logs:
 ```bash
-docker logs ai-assessment
+docker logs ai-assessment-backend
 ```
+
+Common issues:
+- Missing `OPENAI_API_KEY`
+- Port 8000 already in use
+
+### Frontend Can't Connect to Backend
+
+Check backend URL:
+```bash
+docker exec ai-assessment-frontend env | grep BACKEND_API_URL
+```
+
+Should be `http://backend:8000` in Docker Compose.
 
 ### Health Check Failing
 
 Check health status:
 ```bash
-docker inspect --format='{{json .State.Health}}' ai-assessment
+# Backend
+docker inspect --format='{{json .State.Health}}' ai-assessment-backend
+
+# Frontend
+docker inspect --format='{{json .State.Health}}' ai-assessment-frontend
+```
+
+### Network Issues
+
+Verify services are on same network:
+```bash
+docker network inspect ai-assessment-network
 ```
 
 ### Permission Issues
