@@ -7,6 +7,11 @@ langgraph==0.2.45
 # HTTP client (pinned for OpenAI compatibility)
 httpx<0.28.0
 
+# Backend API
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+
 # Web UI
 streamlit==1.39.0
 

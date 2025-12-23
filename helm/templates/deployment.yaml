@@ -1,16 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "ai-assessment.fullname" . }}
+  name: {{ include "ai-assessment.fullname" . }}-backend
   labels:
     {{- include "ai-assessment.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
 spec:
-  {{- if not .Values.autoscaling.enabled }}
-  replicas: {{ .Values.replicaCount }}
+  {{- if not .Values.backend.autoscaling.enabled }}
+  replicas: {{ .Values.backend.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
       {{- include "ai-assessment.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -19,6 +21,7 @@ spec:
       {{- end }}
       labels:
         {{- include "ai-assessment.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -28,14 +31,14 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
-      - name: {{ .Chart.Name }}
+      - name: backend
         securityContext:
           {{- toYaml .Values.securityContext | nindent 12 }}
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+        imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
         ports:
         - name: http
-          containerPort: {{ .Values.service.targetPort }}
+          containerPort: {{ .Values.backend.service.targetPort }}
           protocol: TCP
         env:
         - name: OPENAI_API_KEY
@@ -44,21 +47,87 @@ spec:
               name: {{ include "ai-assessment.fullname" . }}-secret
               key: openai-api-key
         - name: OPENAI_MODEL
-          value: {{ .Values.env.OPENAI_MODEL | quote }}
+          value: {{ .Values.backend.env.OPENAI_MODEL | quote }}
         - name: OPENAI_TEMPERATURE
-          value: {{ .Values.env.OPENAI_TEMPERATURE | quote }}
+          value: {{ .Values.backend.env.OPENAI_TEMPERATURE | quote }}
         - name: CONFIDENCE_THRESHOLD
-          value: {{ .Values.env.CONFIDENCE_THRESHOLD | quote }}
+          value: {{ .Values.backend.env.CONFIDENCE_THRESHOLD | quote }}
         - name: MAX_RETRIES
-          value: {{ .Values.env.MAX_RETRIES | quote }}
+          value: {{ .Values.backend.env.MAX_RETRIES | quote }}
         - name: DEBUG
-          value: {{ .Values.env.DEBUG | quote }}
+          value: {{ .Values.backend.env.DEBUG | quote }}
         livenessProbe:
-          {{- toYaml .Values.livenessProbe | nindent 12 }}
+          {{- toYaml .Values.backend.livenessProbe | nindent 12 }}
         readinessProbe:
-          {{- toYaml .Values.readinessProbe | nindent 12 }}
+          {{- toYaml .Values.backend.readinessProbe | nindent 12 }}
         resources:
-          {{- toYaml .Values.resources | nindent 12 }}
+          {{- toYaml .Values.backend.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-assessment.fullname" . }}-frontend
+  labels:
+    {{- include "ai-assessment.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  {{- if not .Values.frontend.autoscaling.enabled }}
+  replicas: {{ .Values.frontend.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "ai-assessment.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: frontend
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "ai-assessment.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: frontend
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "ai-assessment.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: frontend
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+        imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.frontend.service.targetPort }}
+          protocol: TCP
+        env:
+        - name: BACKEND_API_URL
+          value: {{ .Values.frontend.env.BACKEND_API_URL | quote }}
+        - name: API_TIMEOUT
+          value: {{ .Values.frontend.env.API_TIMEOUT | quote }}
+        livenessProbe:
+          {{- toYaml .Values.frontend.livenessProbe | nindent 12 }}
+        readinessProbe:
+          {{- toYaml .Values.frontend.readinessProbe | nindent 12 }}
+        resources:
+          {{- toYaml .Values.frontend.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

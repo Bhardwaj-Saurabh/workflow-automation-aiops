@@ -1,15 +1,15 @@
 version: '3.8'
 
 services:
-  # AI Assessment Application
-  app:
+  # Backend API Service
+  backend:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.backend
       target: production
-    container_name: ai-assessment
+    container_name: ai-assessment-backend
     ports:
-      - "8501:8501"
+      - "8000:8000"
     environment:
       # OpenAI Configuration
       - OPENAI_API_KEY=${OPENAI_API_KEY}
@@ -24,9 +24,51 @@ services:
     volumes:
       # Mount sample documents for testing
       - ./tests/sample_documents:/app/tests/sample_documents:ro
-      # Optional: Mount for development (comment out for production)
+      # Optional: Mount for development
       # - ./src:/app/src
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    networks:
+      - ai-assessment-network
+
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1.5G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Frontend UI Service
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      target: production
+    container_name: ai-assessment-frontend
+    ports:
+      - "8501:8501"
+    environment:
+      # Backend API URL
+      - BACKEND_API_URL=http://backend:8000
+      - API_TIMEOUT=${API_TIMEOUT:-300}
+
+    depends_on:
+      - backend
+
+    volumes:
+      # Optional: Mount for development
       # - ./ui:/app/ui
+      pass
 
     restart: unless-stopped
 
@@ -40,15 +82,14 @@ services:
     networks:
       - ai-assessment-network
 
-    # Resource limits (adjust based on your needs)
     deploy:
       resources:
         limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
+          cpus: '1.0'
           memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
 networks:
   ai-assessment-network:
