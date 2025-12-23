@@ -3,14 +3,14 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ master, main, develop ]
-  pull_request:
-    branches: [ master, main ]
+
   workflow_dispatch:
 
 env:
-  REGISTRY: ghcr.io
-  BACKEND_IMAGE_NAME: ${{ github.repository }}-backend
-  FRONTEND_IMAGE_NAME: ${{ github.repository }}-frontend
+  REGISTRY: docker.io
+  DOCKER_USERNAME: aryansaurabhbhardwaj
+  BACKEND_IMAGE_NAME: aryansaurabhbhardwaj/ai-assessment-backend
+  FRONTEND_IMAGE_NAME: aryansaurabhbhardwaj/ai-assessment-frontend
 
 jobs:
   # Job 1: Run Tests
@@ -190,7 +190,7 @@ jobs:
     - name: Run Trivy vulnerability scanner on Backend
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE_NAME }}:latest
+        image-ref: ${{ env.BACKEND_IMAGE_NAME }}:latest
         format: 'sarif'
         output: 'trivy-backend-results.sarif'
       continue-on-error: true
@@ -198,7 +198,7 @@ jobs:
     - name: Run Trivy vulnerability scanner on Frontend
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:latest
+        image-ref: ${{ env.FRONTEND_IMAGE_NAME }}:latest
         format: 'sarif'
         output: 'trivy-frontend-results.sarif'
       continue-on-error: true
