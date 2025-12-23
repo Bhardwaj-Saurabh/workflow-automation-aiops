@@ -1,0 +1,27 @@
+Q: What is Python?
+Expected: Python is a high-level, interpreted programming language known for its simplicity and readability
+A: Python is a programming language used for web development, data science, and automation
+
+Q: What is the difference between a list and a tuple in Python?
+Expected: Lists are mutable (can be changed) while tuples are immutable (cannot be changed after creation)
+A: Lists use square brackets [] and can be modified. Tuples use parentheses () and cannot be changed.
+
+Q: True or False: Python is a compiled language
+A: False
+
+Q: What is the output of: print(2 ** 3)?
+A: 8
+
+Q: Write a Python function that returns the sum of two numbers
+A: def add_numbers(a, b):
+    return a + b
+
+Q: Explain the concept of object-oriented programming
+A: Object-oriented programming (OOP) is a programming paradigm based on the concept of objects, which contain data and code. The main principles are encapsulation, inheritance, and polymorphism. It helps organize code into reusable components.
+
+Q: What does the 'self' keyword mean in Python?
+Expected: 'self' refers to the instance of the class and is used to access variables and methods
+A: self is used in class methods to refer to the object itself
+
+Q: What is 5 + 3 * 2?
+A: 11
