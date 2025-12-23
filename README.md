@@ -222,9 +222,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🗺️ Roadmap
 
 - [x] Phase 1: Project setup and foundation
-- [ ] Phase 2: Document processing
-- [ ] Phase 3: AI evaluation engine
-- [ ] Phase 4: LangGraph workflow
+- [x] Phase 2: Document processing
+- [x] Phase 3: AI evaluation engine
+- [x] Phase 4: LangGraph workflow
 - [ ] Phase 5: Streamlit UI
 - [ ] Phase 6: Reporting and analysis
 - [ ] Phase 7: Testing
