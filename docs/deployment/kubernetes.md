@@ -1,6 +1,47 @@
 # Kubernetes Deployment Guide
 
-Complete guide for deploying the AI Assessment System to Kubernetes using Helm.
+Complete guide for deploying the AI Assessment System to Kubernetes using Helm with **microservices architecture**.
+
+---
+
+## Architecture Overview
+
+The application is deployed as two separate services:
+
+```
+┌─────────────────────────────────────────────────────┐
+│                Kubernetes Cluster                    │
+│                                                      │
+│  ┌────────────────────────────────────────────┐    │
+│  │         Ingress (NGINX)                     │    │
+│  └──────────────────┬─────────────────────────┘    │
+│                     │                               │
+│  ┌──────────────────▼─────────────────────────┐    │
+│  │    Frontend Service (LoadBalancer)          │    │
+│  │    ai-assessment-frontend                   │    │
+│  └──────────────────┬─────────────────────────┘    │
+│                     │                               │
+│  ┌──────────────────▼─────────────────────────┐    │
+│  │    Frontend Deployment (2-8 pods)           │    │
+│  │    Streamlit UI                             │    │
+│  │    Port: 8501                               │    │
+│  └──────────────────┬─────────────────────────┘    │
+│                     │ HTTP/REST                     │
+│  ┌──────────────────▼─────────────────────────┐    │
+│  │    Backend Service (ClusterIP)              │    │
+│  │    ai-assessment-backend                    │    │
+│  └──────────────────┬─────────────────────────┘    │
+│                     │                               │
+│  ┌──────────────────▼─────────────────────────┐    │
+│  │    Backend Deployment (2-10 pods)           │    │
+│  │    FastAPI + Business Logic                 │    │
+│  │    Port: 8000                               │    │
+│  └──────────────────┬─────────────────────────┘    │
+│                     │                               │
+│                     ▼                               │
+│              OpenAI API (External)                  │
+└─────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -25,17 +66,21 @@ You need access to a Kubernetes cluster. Options:
 
 ## Quick Start
 
-### 1. Build and Push Image
+### 1. Build and Push Images
 
 ```bash
-# Build image
-docker build -t ghcr.io/bhardwaj-saurabh/ai-assessment:1.0.0 .
+# Build backend
+docker build -f Dockerfile.backend -t ghcr.io/bhardwaj-saurabh/ai-assessment-backend:1.0.0 .
+
+# Build frontend
+docker build -f Dockerfile.frontend -t ghcr.io/bhardwaj-saurabh/ai-assessment-frontend:1.0.0 .
 
 # Login to registry
 echo $GITHUB_TOKEN | docker login ghcr.io -u bhardwaj-saurabh --password-stdin
 
-# Push image
-docker push ghcr.io/bhardwaj-saurabh/ai-assessment:1.0.0
+# Push images
+docker push ghcr.io/bhardwaj-saurabh/ai-assessment-backend:1.0.0
+docker push ghcr.io/bhardwaj-saurabh/ai-assessment-frontend:1.0.0
 ```
 
 ### 2. Create Namespace
@@ -44,59 +89,66 @@ docker push ghcr.io/bhardwaj-saurabh/ai-assessment:1.0.0
 kubectl create namespace ai-assessment
 ```
 
-### 3. Create Secret for API Key
-
-```bash
-kubectl create secret generic ai-assessment-secret \
-  --from-literal=openai-api-key=$OPENAI_API_KEY \
-  -n ai-assessment
-```
-
-### 4. Deploy with Helm
+### 3. Deploy with Helm
 
 ```bash
 helm install ai-assessment ./helm \
   --namespace ai-assessment \
-  --set image.repository=ghcr.io/bhardwaj-saurabh/ai-assessment \
-  --set image.tag=1.0.0 \
+  --set backend.image.repository=ghcr.io/bhardwaj-saurabh/ai-assessment-backend \
+  --set backend.image.tag=1.0.0 \
+  --set frontend.image.repository=ghcr.io/bhardwaj-saurabh/ai-assessment-frontend \
+  --set frontend.image.tag=1.0.0 \
   --set secrets.openaiApiKey=$OPENAI_API_KEY
 ```
 
-### 5. Verify Deployment
+### 4. Verify Deployment
 
 ```bash
-# Check pods
+# Check pods (should see both frontend and backend pods)
 kubectl get pods -n ai-assessment
 
-# Check service
+# Check services
 kubectl get svc -n ai-assessment
 
 # View logs
-kubectl logs -f deployment/ai-assessment -n ai-assessment
+kubectl logs -f deployment/ai-assessment-backend -n ai-assessment
+kubectl logs -f deployment/ai-assessment-frontend -n ai-assessment
 ```
 
-### 6. Access Application
+### 5. Access Application
 
 ```bash
-# Port forward
-kubectl port-forward svc/ai-assessment 8501:80 -n ai-assessment
+# Port forward frontend
+kubectl port-forward svc/ai-assessment-frontend 8501:80 -n ai-assessment
 
 # Open browser
 open http://localhost:8501
+
+# Access backend API docs
+kubectl port-forward svc/ai-assessment-backend 8000:8000 -n ai-assessment
+open http://localhost:8000/docs
 ```
 
 ---
 
-## Automated Deployment
+## Helm Chart Structure
 
-Use the provided deployment script:
+The Helm chart deploys two separate services:
 
-```bash
-# Development
-./scripts/deploy.sh dev 1.0.0
-
-# Production
-./scripts/deploy.sh prod 1.0.0
+```
+helm/
+├── Chart.yaml                 # Chart metadata
+├── values.yaml               # Default configuration (microservices)
+├── values-dev.yaml          # Development overrides
+├── values-prod.yaml         # Production overrides
+└── templates/
+    ├── deployment.yaml      # Frontend + Backend Deployments
+    ├── service.yaml         # Frontend + Backend Services
+    ├── ingress.yaml         # Ingress (routes to frontend)
+    ├── secret.yaml          # API keys
+    ├── hpa.yaml            # Autoscalers for both services
+    ├── serviceaccount.yaml  # Service account
+    └── _helpers.tpl         # Template helpers
 ```
 
 ---
@@ -106,24 +158,69 @@ Use the provided deployment script:
 ### Environment-Specific Values
 
 **Development** (`helm/values-dev.yaml`):
-- 1 replica
-- NodePort service
-- Reduced resources
+- Backend: 1 replica, reduced resources
+- Frontend: 1 replica, NodePort service
+- Autoscaling disabled
 - Debug enabled
 
 **Production** (`helm/values-prod.yaml`):
-- 5 replicas
-- LoadBalancer service
-- Higher resources
-- Autoscaling enabled
+- Backend: 5 replicas, higher resources
+- Frontend: 3 replicas, LoadBalancer service
+- Autoscaling enabled (backend: 3-20, frontend: 2-10)
+- Debug disabled
+
+### Key Configuration Values
+
+```yaml
+# Backend Configuration
+backend:
+  replicaCount: 3
+  image:
+    repository: ghcr.io/bhardwaj-saurabh/ai-assessment-backend
+    tag: "1.0.0"
+  service:
+    type: ClusterIP  # Internal only
+    port: 8000
+  resources:
+    limits:
+      cpu: 1500m
+      memory: 2Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+
+# Frontend Configuration
+frontend:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/bhardwaj-saurabh/ai-assessment-frontend
+    tag: "1.0.0"
+  service:
+    type: LoadBalancer  # External access
+    port: 80
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+  env:
+    BACKEND_API_URL: "http://ai-assessment-backend:8000"
+```
 
 ### Custom Values
 
+Override values during installation:
+
 ```bash
 helm install ai-assessment ./helm \
-  --set replicaCount=3 \
-  --set resources.limits.memory=4Gi \
-  --set autoscaling.maxReplicas=15
+  --set backend.replicaCount=5 \
+  --set frontend.replicaCount=3 \
+  --set backend.resources.limits.memory=4Gi \
+  --set frontend.autoscaling.maxReplicas=15
 ```
 
 ---
